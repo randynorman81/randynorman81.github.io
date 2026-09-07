@@ -28,7 +28,7 @@ export default async (req) => {
     return json({ error: "Invalid request body." }, 400);
   }
 
-  const { ticketId, studentId, answers } = body;
+  const { ticketId, studentId, pin, answers } = body;
   if (!ticketId || !studentId || !answers || typeof answers !== "object") {
     return json({ error: "Missing ticket id, student, or answers." }, 400);
   }
@@ -39,6 +39,10 @@ export default async (req) => {
 
   const student = ticket.roster.find((s) => s.id === studentId);
   if (!student) return json({ error: "We could not find your name on the class roster. Please check with your teacher." }, 400);
+
+  if (String(pin || "") !== String(student.pin || "")) {
+    return json({ error: "That PIN doesn't match the name you selected. Double-check your PIN and try again." }, 403);
+  }
 
   const perQuestion = ticket.questions.map((q) => {
     const given = answers[q.id];

@@ -297,6 +297,7 @@
           <label>&hellip;or paste names, one per line</label>
           <textarea id="fRosterText" rows="5" placeholder="Ada Lovelace&#10;Grace Hopper&#10;Alan Turing">${escapeHtml((draft.roster || []).map(s => s.name).join("\n"))}</textarea>
           <button class="secondary" id="btnParseRoster" type="button" style="margin-top:8px;">Update roster from text</button>
+          <p class="muted" style="margin-top:10px;">Each student gets a random 4-digit PIN so nobody can submit under a classmate's name &mdash; you'll get a printable list after publishing. Tip: add a "PIN" or "Student ID" column to your CSV to set your own PINs instead.</p>
           <div id="rosterPreview" style="margin-top:14px;"></div>
         </div>
       `;
@@ -306,16 +307,21 @@
         if (!file) return;
         const text = await file.text();
         qs("#fRosterText").value = text;
-        draft.roster = parseRoster(text);
+        draft.roster = mergeRosterPins(parseRoster(text), draft.roster);
         renderRosterPreview();
       });
 
       qs("#btnParseRoster").addEventListener("click", () => {
-        draft.roster = parseRoster(qs("#fRosterText").value);
+        draft.roster = mergeRosterPins(parseRoster(qs("#fRosterText").value), draft.roster);
         renderRosterPreview();
       });
 
       renderRosterPreview();
+    }
+
+    function mergeRosterPins(newRoster, oldRoster) {
+      const oldByName = new Map((oldRoster || []).map((s) => [s.name, s.pin]));
+      return newRoster.map((s) => (oldByName.has(s.name) ? { ...s, pin: oldByName.get(s.name) } : s));
     }
 
     function renderRosterPreview() {
@@ -327,8 +333,8 @@
       el.innerHTML = `
         <p class="muted">${draft.roster.length} student${draft.roster.length === 1 ? "" : "s"} loaded.</p>
         <div class="table-scroll">
-          <table><thead><tr><th>#</th><th>Name</th></tr></thead><tbody>
-            ${draft.roster.map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td></tr>`).join("")}
+          <table><thead><tr><th>#</th><th>Name</th><th>PIN</th></tr></thead><tbody>
+            ${draft.roster.map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td><code>${escapeHtml(s.pin)}</code></td></tr>`).join("")}
           </tbody></table>
         </div>
       `;
@@ -394,9 +400,17 @@
           <div class="link-box"><span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(resultsUrl)}</span>
             <button class="secondary" type="button" onclick="copyToClipboard('${resultsUrl}')">Copy</button>
           </div>
+          <label>Student PINs <span class="hint">each student needs their name + PIN to submit, so no one can answer as a classmate &mdash; hand these out (print, post in your LMS privately, etc.)</span></label>
+          <button class="secondary" id="btnDownloadPins" type="button">Download roster &amp; PINs (CSV)</button>
           <p style="margin-top:16px;"><a class="btn" href="${resultsUrl}">Go to results page &rarr;</a></p>
         </div>
       `;
+      qs("#btnDownloadPins").addEventListener("click", () => {
+        downloadCSV(`${draft.title.replace(/[^a-z0-9]+/gi, "-")}-student-pins.csv`, [
+          ["Name", "PIN"],
+          ...draft.roster.map((s) => [s.name, s.pin]),
+        ]);
+      });
     }
 
     // ---------------------------------------------------------------------
@@ -486,6 +500,7 @@
           </div>
           <p style="margin-top:12px;">
             <button class="secondary" id="btnExport" type="button">Export results as CSV</button>
+            <button class="secondary" id="btnDownloadPins" type="button">Download roster &amp; PINs (CSV)</button>
             <button class="secondary" id="btnRefresh" type="button">Refresh</button>
           </p>
         </div>
@@ -510,6 +525,12 @@
 
       qs("#btnRefresh").addEventListener("click", () => renderResultsPage(ticket.id, ticket.editCode));
       qs("#btnExport").addEventListener("click", () => exportResultsCSV(ticket, responses));
+      qs("#btnDownloadPins").addEventListener("click", () => {
+        downloadCSV(`${ticket.title.replace(/[^a-z0-9]+/gi, "-")}-student-pins.csv`, [
+          ["Name", "PIN"],
+          ...roster.map((s) => [s.name, s.pin]),
+        ]);
+      });
 
       if (roster.length) {
         const tbody = qs("#resultsBody");

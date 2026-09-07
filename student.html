@@ -61,6 +61,8 @@
               <option value="">-- Select your name --</option>
               ${ticket.roster.map((s) => `<option value="${s.id}" ${selectedStudentId === s.id ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("")}
             </select>
+            <label>Enter your PIN <span class="hint">the 4-digit PIN your teacher gave you</span></label>
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="pinInput" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off" />
           ` : `<p class="error-box">This exit ticket has no roster loaded. Ask your teacher to add one before you can submit.</p>`}
         </div>
 
@@ -107,9 +109,17 @@
       e.preventDefault();
       qs("#submitError").innerHTML = "";
 
-      if (ticket.roster.length && !selectedStudentId) {
-        qs("#submitError").innerHTML = `<div class="error-box">Please select your name first.</div>`;
-        return;
+      let pin = "";
+      if (ticket.roster.length) {
+        if (!selectedStudentId) {
+          qs("#submitError").innerHTML = `<div class="error-box">Please select your name first.</div>`;
+          return;
+        }
+        pin = qs("#pinInput").value.trim();
+        if (!/^\d{4}$/.test(pin)) {
+          qs("#submitError").innerHTML = `<div class="error-box">Please enter the 4-digit PIN your teacher gave you.</div>`;
+          return;
+        }
       }
 
       for (const q of ticket.questions) {
@@ -134,7 +144,7 @@
         const result = await fetchJSON("/.netlify/functions/submit-response", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ticketId: ticket.id, studentId: selectedStudentId, answers }),
+          body: JSON.stringify({ ticketId: ticket.id, studentId: selectedStudentId, pin, answers }),
         });
         localStorage.setItem(`exitTicketStudent:${ticketId}`, selectedStudentId);
         showResult(result);

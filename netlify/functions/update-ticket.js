@@ -7,6 +7,10 @@ function json(obj, status) {
   });
 }
 
+function randomPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 function normalizeQuestion(q, i) {
   const id = "q" + i;
   if (q.type === "short_answer") {
@@ -59,9 +63,14 @@ export default async (req) => {
   ticket.subject = String(body.subject || "").trim();
   ticket.gradeLevel = String(body.gradeLevel || "").trim();
   ticket.questions = questions.map(normalizeQuestion);
+  const existingPins = new Map((ticket.roster || []).map((s) => [s.id, s.pin]));
   ticket.roster = roster
     .filter((s) => s && String(s.name || "").trim())
-    .map((s, i) => ({ id: String(s.id || "r" + i), name: String(s.name).trim() }));
+    .map((s, i) => {
+      const id = String(s.id || "r" + i);
+      const pin = /^\d{4}$/.test(String(s.pin || "")) ? String(s.pin) : (existingPins.get(id) || randomPin());
+      return { id, name: String(s.name).trim(), pin };
+    });
 
   await store.setJSON(`ticket:${id}`, ticket);
   return json({ ok: true });

@@ -12,6 +12,15 @@ function randomId(len) {
   return randomBytes(len || 12).toString("hex").slice(0, len || 12);
 }
 
+function randomPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+function normalizeStudent(s, i) {
+  const pin = /^\d{4}$/.test(String(s.pin || "")) ? String(s.pin) : randomPin();
+  return { id: String(s.id || "r" + i), name: String(s.name).trim(), pin };
+}
+
 function normalizeQuestion(q, i) {
   const id = "q" + i;
   if (q.type === "short_answer") {
@@ -72,7 +81,7 @@ export default async (req) => {
     questions: questions.map(normalizeQuestion),
     roster: roster
       .filter((s) => s && String(s.name || "").trim())
-      .map((s, i) => ({ id: String(s.id || "r" + i), name: String(s.name).trim() })),
+      .map(normalizeStudent),
   };
 
   try {

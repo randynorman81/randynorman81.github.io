@@ -10,7 +10,11 @@ as-is.
   question, all editable before publishing.
 - **Rosters** can be uploaded as a CSV (a "Name" column, or First/Last columns) or
   just pasted as one name per line, so students pick their name instead of typing it.
-- **Students** open one link, answer the questions, and submit.
+  Each student gets a private 4-digit PIN (auto-generated, or set your own via a
+  "PIN"/"Student ID" column in the CSV) so a student can't submit under a
+  classmate's name.
+- **Students** open one link, pick their name, enter their PIN, answer the
+  questions, and submit.
 - **Grading is automatic** for multiple-choice/true-false questions. Short-answer
   questions get a best-effort keyword check that the teacher can override with one
   click on the results page.
@@ -56,22 +60,29 @@ requires no extra configuration.
 3. Review the generated questions — edit wording, swap answer choices, add or
    remove questions, and pick which option is correct for each.
 4. Upload or paste your class roster.
-5. Click **Save & Publish**. You'll get two links:
+5. Click **Save & Publish**. You'll get:
    - A **student link** — share this with your class (project it, post it in your
      LMS, etc.).
    - A **results link** — bookmark this. It's the only way to see or edit results
      later, and it also lets you fix the questions after publishing.
+   - A **"Download roster & PINs" CSV** — each student needs their own PIN (along
+     with picking their name) to submit. Print this, or share each student's PIN
+     with them privately (not the same public place as the student link).
 6. As students submit, refresh the results page to see scores. Multiple-choice
    questions are graded instantly; click **Details** next to a student to review
    short answers and mark them correct/incorrect if needed.
-7. Use **Export results as CSV** to download a gradebook-ready spreadsheet.
+7. Use **Export results as CSV** to download a gradebook-ready spreadsheet, or
+   **Download roster & PINs (CSV)** again if a student loses theirs.
 
 ## Notes & limits
 
 - This is intentionally lightweight: there's no teacher login. Anyone with a
   results link can view/edit that exit ticket's results, so treat those links like
-  a password and don't post them publicly. Anyone with a *student* link can submit
-  once per roster name (resubmitting replaces the earlier answer).
+  a password and don't post them publicly. A student needs both a roster name
+  *and* the matching 4-digit PIN to submit (resubmitting with the right PIN
+  replaces their earlier answer). PINs deter casual impersonation — a classmate
+  guessing a 4-digit code isn't cryptographically hard — so keep the PIN list out
+  of the same public place as the student link, same as you would a paper roster.
 - Short-answer grading is a simple keyword match, not full AI grading — it's meant
   to save time, not replace a teacher's judgment. Every short answer is flagged for
   a quick review on the results page.

@@ -75,6 +75,10 @@ function splitDelimitedLine(line, delim) {
   return out;
 }
 
+function randomPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 function parseRoster(text) {
   const lines = String(text || "")
     .split(/\r\n|\n|\r/)
@@ -89,29 +93,35 @@ function parseRoster(text) {
   const nameIdx = header.findIndex((h) => h.includes("name"));
   const firstIdx = header.findIndex((h) => h.includes("first"));
   const lastIdx = header.findIndex((h) => h.includes("last"));
-  const looksLikeHeader = nameIdx >= 0 || firstIdx >= 0 || lastIdx >= 0;
+  const pinIdx = header.findIndex((h) => /pin|student ?id|^id$/.test(h));
+  const looksLikeHeader = nameIdx >= 0 || firstIdx >= 0 || lastIdx >= 0 || pinIdx >= 0;
   const dataRows = looksLikeHeader ? rows.slice(1) : rows;
 
-  const names = dataRows.map((r) => {
+  const entries = dataRows.map((r) => {
     let name;
     if (nameIdx >= 0) name = r[nameIdx];
     else if (firstIdx >= 0 || lastIdx >= 0) name = [r[firstIdx] || "", r[lastIdx] || ""].filter(Boolean).join(" ");
     else name = r[0];
-    return (name || "").trim();
-  }).filter(Boolean);
+    name = (name || "").trim();
+    const rawPin = pinIdx >= 0 ? String(r[pinIdx] || "").replace(/\D/g, "").slice(-4) : "";
+    return { name, pin: rawPin };
+  }).filter((e) => e.name);
 
-  // De-duplicate identical names by appending a counter, and assign stable ids.
+  // De-duplicate identical names by appending a counter, and assign stable ids + a 4-digit PIN
+  // (taken from a PIN/Student ID column if the file had one, otherwise randomly generated) so a
+  // student can't submit an exit ticket under a classmate's name.
   const seen = new Map();
-  return names.map((name, i) => {
-    let label = name;
-    if (seen.has(name)) {
-      const n = seen.get(name) + 1;
-      seen.set(name, n);
-      label = `${name} (${n + 1})`;
+  return entries.map((entry, i) => {
+    let label = entry.name;
+    if (seen.has(entry.name)) {
+      const n = seen.get(entry.name) + 1;
+      seen.set(entry.name, n);
+      label = `${entry.name} (${n + 1})`;
     } else {
-      seen.set(name, 0);
+      seen.set(entry.name, 0);
     }
-    return { id: "r" + i, name: label };
+    const pin = entry.pin.length === 4 ? entry.pin : randomPin();
+    return { id: "r" + i, name: label, pin };
   });
 }
 
