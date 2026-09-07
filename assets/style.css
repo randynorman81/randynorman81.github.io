@@ -37,6 +37,22 @@ header.site .wrap {
   gap: 12px;
 }
 
+header.site .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+header.site .logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
 header.site h1 {
   font-size: 1.3rem;
   margin: 0;
