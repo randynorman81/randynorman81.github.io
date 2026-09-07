@@ -1,9 +1,61 @@
-<html>
-
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Social Circle High School Exit Tickets</title>
+  <link rel="icon" href="assets/logo.jpg" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
 <body>
-  <h1>Norman</h1>
-  <p>practice site</p>
-  <img src="https://content.codecademy.com/articles/github-pages-via-web-app/happy-ice-cream.gif" />
-</body>
+  <header class="site">
+    <div class="wrap">
+      <div class="brand">
+        <img class="logo" src="assets/logo.jpg" alt="Social Circle High School logo" />
+        <h1>Social Circle High School Exit Tickets</h1>
+      </div>
+      <span class="tag">for teachers, no coding required</span>
+    </div>
+  </header>
 
+  <main class="wrap">
+    <div class="card">
+      <h2>Turn any lesson into a self-grading exit ticket</h2>
+      <p>
+        Paste in your notes, slides, or a worksheet (or upload a .txt, .pdf, or .docx file) and this tool
+        will use AI to write a short exit ticket &mdash; a few multiple-choice questions and an optional
+        short-answer reflection &mdash; based on exactly what you taught that day.
+      </p>
+      <p>
+        Upload your class roster, share one link with students, and watch responses get scored automatically
+        as they come in.
+      </p>
+      <p class="center" style="margin-top: 24px;">
+        <a class="btn" href="teacher.html">Create an Exit Ticket &rarr;</a>
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>How it works</h2>
+      <ol>
+        <li><strong>Upload or paste your lesson content.</strong> The AI reads it and drafts questions &mdash; you can edit anything before publishing.</li>
+        <li><strong>Upload your roster.</strong> A CSV or a simple list of student names, so students just pick their name instead of typing it.</li>
+        <li><strong>Share the student link.</strong> Students answer on their phone or laptop and submit.</li>
+        <li><strong>Check the results page.</strong> Multiple-choice is graded instantly; short answers get a quick AI-assisted check that you can override with one click.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>Your data</h2>
+      <p class="muted">
+        Exit tickets are stored on this site's own Netlify deployment (Netlify Blobs) &mdash; nothing is sent
+        anywhere else except the lesson text, which is sent to the AI provider once to generate questions.
+        Each exit ticket you create has its own private results link; keep it somewhere safe, since it's the
+        only way to see or edit results later.
+      </p>
+    </div>
+  </main>
+
+  <footer class="site">Deploy your own copy to Netlify &mdash; see README.md in the project files.</footer>
+</body>
 </html>

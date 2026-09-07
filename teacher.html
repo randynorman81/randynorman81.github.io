@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create an Exit Ticket</title>
+  <link rel="icon" href="assets/logo.jpg" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <div class="brand">
+        <a href="index.html"><img class="logo" src="assets/logo.jpg" alt="Social Circle High School logo" /></a>
+        <h1><a href="index.html">Social Circle High School Exit Tickets</a></h1>
+      </div>
+      <span class="tag">Teacher dashboard</span>
+    </div>
+  </header>
+
+  <main class="wrap" id="app">
+    <p class="muted">Loading&hellip;</p>
+  </main>
+
+  <footer class="site">Exit Ticket Generator &middot; <a href="index.html">Home</a></footer>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const app = qs("#app");
+
+    // ---------------------------------------------------------------------
+    // State for the "create a new ticket" flow
+    // ---------------------------------------------------------------------
+    const draft = {
+      title: "",
+      subject: "",
+      gradeLevel: "",
+      content: "",
+      numMC: 3,
+      includeShort: true,
+      questions: null, // set after generation
+      roster: [],
+      generating: false,
+      saving: false,
+      error: null,
+    };
+
+    function newQuestion(type) {
+      if (type === "short_answer") {
+        return { id: uid("q"), type: "short_answer", prompt: "", acceptableAnswers: [] };
+      }
+      return { id: uid("q"), type: "multiple_choice", prompt: "", options: ["", "", "", ""], correctIndex: 0 };
+    }
+
+    // ---------------------------------------------------------------------
+    // Routing: results view if ?id=&editCode= present, otherwise the
+    // create / my-tickets tabs.
+    // ---------------------------------------------------------------------
+    const params = new URLSearchParams(location.search);
+    const routeId = params.get("id");
+    const routeEditCode = params.get("editCode");
+    let activeTab = "create";
+
+    if (routeId && routeEditCode) {
+      renderResultsPage(routeId, routeEditCode);
+    } else {
+      renderTabs();
+    }
+
+    function renderTabs() {
+      app.innerHTML = `
+        <div class="tabs">
+          <button data-tab="create" class="${activeTab === "create" ? "active" : ""}">Create New</button>
+          <button data-tab="mine" class="${activeTab === "mine" ? "active" : ""}">My Tickets</button>
+        </div>
+        <div id="tabBody"></div>
+      `;
+      qsa("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        activeTab = b.dataset.tab;
+        renderTabs();
+      }));
+      if (activeTab === "create") renderCreateTab();
+      else renderMyTicketsTab();
+    }
+
+    // ---------------------------------------------------------------------
+    // Create tab
+    // ---------------------------------------------------------------------
+    function renderCreateTab() {
+      const body = qs("#tabBody");
+      body.innerHTML = `
+        <div class="card">
+          <h2>1. Lesson details</h2>
+          <div class="row">
+            <div>
+              <label>Subject <span class="hint">optional</span></label>
+              <input type="text" id="fSubject" value="${escapeHtml(draft.subject)}" placeholder="e.g. Biology" />
+            </div>
+            <div>
+              <label>Grade level <span class="hint">optional</span></label>
+              <input type="text" id="fGrade" value="${escapeHtml(draft.gradeLevel)}" placeholder="e.g. 10th grade" />
+            </div>
+          </div>
+
+          <label>Paste your lesson content <span class="hint">notes, a summary of what you taught, a worksheet, slide text&hellip;</span></label>
+          <textarea id="fContent" rows="8" placeholder="Paste lesson content here...">${escapeHtml(draft.content)}</textarea>
+
+          <label>&hellip;or upload a file <span class="hint">.txt, .md, .pdf, or .docx &mdash; this will fill in the box above</span></label>
+          <input type="file" id="fFile" accept=".txt,.md,.pdf,.docx" />
+          <p id="fileStatus" class="muted"></p>
+
+          <div class="row" style="margin-top:10px;">
+            <div>
+              <label>Number of multiple-choice questions</label>
+              <input type="number" id="fNumMC" min="1" max="6" value="${draft.numMC}" />
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <label style="font-weight:400; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="fIncludeShort" style="width:auto;" ${draft.includeShort ? "checked" : ""} />
+                Include one short-answer reflection question
+              </label>
+            </div>
+          </div>
+
+          ${draft.error ? `<div class="error-box">${escapeHtml(draft.error)}</div>` : ""}
+
+          <p style="margin-top:16px;">
+            <button id="btnGenerate" ${draft.generating ? "disabled" : ""}>
+              ${draft.generating ? '<span class="spinner"></span> Generating&hellip;' : "Generate Exit Ticket with AI"}
+            </button>
+          </p>
+        </div>
+
+        <div id="questionsSection"></div>
+        <div id="rosterSection"></div>
+        <div id="publishSection"></div>
+      `;
+
+      qs("#fSubject").addEventListener("input", (e) => draft.subject = e.target.value);
+      qs("#fGrade").addEventListener("input", (e) => draft.gradeLevel = e.target.value);
+      qs("#fContent").addEventListener("input", (e) => draft.content = e.target.value);
+      qs("#fNumMC").addEventListener("input", (e) => draft.numMC = e.target.value);
+      qs("#fIncludeShort").addEventListener("change", (e) => draft.includeShort = e.target.checked);
+
+      qs("#fFile").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const statusEl = qs("#fileStatus");
+        statusEl.textContent = "Reading file…";
+        try {
+          const text = await extractTextFromFile(file);
+          draft.content = text.trim();
+          qs("#fContent").value = draft.content;
+          statusEl.textContent = `Loaded ${file.name} (${draft.content.length.toLocaleString()} characters).`;
+        } catch (err) {
+          statusEl.textContent = "";
+          toast(err.message);
+        }
+      });
+
+      qs("#btnGenerate").addEventListener("click", generateTicket);
+
+      if (draft.questions) renderQuestionsSection();
+      if (draft.questions) renderRosterSection();
+      if (draft.questions) renderPublishSection();
+    }
+
+    async function generateTicket() {
+      draft.error = null;
+      if ((draft.content || "").trim().length < 20) {
+        draft.error = "Please add a bit more lesson content first (at least a few sentences).";
+        renderCreateTab();
+        return;
+      }
+      draft.generating = true;
+      renderCreateTab();
+      try {
+        const result = await fetchJSON("/.netlify/functions/generate-ticket", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            content: draft.content,
+            subject: draft.subject,
+            gradeLevel: draft.gradeLevel,
+            numMultipleChoice: draft.numMC,
+            includeShortAnswer: draft.includeShort,
+          }),
+        });
+        draft.title = result.title;
+        draft.questions = result.questions;
+        draft.generating = false;
+        renderCreateTab();
+        document.getElementById("questionsSection").scrollIntoView({ behavior: "smooth" });
+      } catch (err) {
+        draft.generating = false;
+        draft.error = err.message;
+        renderCreateTab();
+      }
+    }
+
+    function renderQuestionsSection() {
+      const section = qs("#questionsSection");
+      section.innerHTML = `
+        <div class="card">
+          <h2>2. Review &amp; edit questions</h2>
+          <label>Title</label>
+          <input type="text" id="fTitle" value="${escapeHtml(draft.title)}" />
+          <div id="questionList"></div>
+          <div class="row" style="margin-top:6px;">
+            <button class="secondary" id="addMC" type="button">+ Add multiple-choice</button>
+            <button class="secondary" id="addTF" type="button">+ Add true/false</button>
+            <button class="secondary" id="addSA" type="button">+ Add short answer</button>
+          </div>
+        </div>
+      `;
+      qs("#fTitle").addEventListener("input", (e) => draft.title = e.target.value);
+      qs("#addMC").addEventListener("click", () => { draft.questions.push(newQuestion("multiple_choice")); renderQuestionsSection(); });
+      qs("#addTF").addEventListener("click", () => {
+        const q = newQuestion("multiple_choice");
+        q.type = "true_false";
+        q.options = ["True", "False"];
+        draft.questions.push(q);
+        renderQuestionsSection();
+      });
+      qs("#addSA").addEventListener("click", () => { draft.questions.push(newQuestion("short_answer")); renderQuestionsSection(); });
+      renderQuestionList();
+    }
+
+    function renderQuestionList() {
+      const list = qs("#questionList");
+      list.innerHTML = draft.questions.map((q, i) => questionCardHtml(q, i)).join("");
+
+      draft.questions.forEach((q, i) => {
+        const card = list.children[i];
+        qs('[data-role="prompt"]', card).addEventListener("input", (e) => q.prompt = e.target.value);
+        qs('[data-role="remove"]', card).addEventListener("click", () => { draft.questions.splice(i, 1); renderQuestionList(); });
+
+        if (q.type === "short_answer") {
+          qs('[data-role="answers"]', card).addEventListener("input", (e) => {
+            q.acceptableAnswers = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+          });
+        } else {
+          qsa('[data-role="option"]', card).forEach((inp, oi) => {
+            inp.addEventListener("input", (e) => q.options[oi] = e.target.value);
+          });
+          qsa('[data-role="correct"]', card).forEach((radio, oi) => {
+            radio.addEventListener("change", () => { q.correctIndex = oi; });
+          });
+        }
+      });
+    }
+
+    function questionCardHtml(q, i) {
+      if (q.type === "short_answer") {
+        return `
+          <div class="question-card">
+            <div class="qhead">
+              <strong>Q${i + 1} &middot; Short answer</strong>
+              <button class="secondary" data-role="remove" type="button">Remove</button>
+            </div>
+            <label>Question</label>
+            <input type="text" data-role="prompt" value="${escapeHtml(q.prompt)}" />
+            <label>Acceptable keywords/phrases <span class="hint">comma-separated; used to auto-check answers (you can override any grade later)</span></label>
+            <input type="text" data-role="answers" value="${escapeHtml((q.acceptableAnswers || []).join(", "))}" />
+          </div>
+        `;
+      }
+      const label = q.type === "true_false" ? "True / False" : "Multiple choice";
+      return `
+        <div class="question-card">
+          <div class="qhead">
+            <strong>Q${i + 1} &middot; ${label}</strong>
+            <button class="secondary" data-role="remove" type="button">Remove</button>
+          </div>
+          <label>Question</label>
+          <input type="text" data-role="prompt" value="${escapeHtml(q.prompt)}" />
+          <label>Options <span class="hint">select the correct answer</span></label>
+          ${q.options.map((opt, oi) => `
+            <div class="option-row">
+              <input type="radio" name="correct-${q.id}" data-role="correct" ${q.correctIndex === oi ? "checked" : ""} />
+              <input type="text" data-role="option" value="${escapeHtml(opt)}" placeholder="Option ${oi + 1}" />
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderRosterSection() {
+      const section = qs("#rosterSection");
+      section.innerHTML = `
+        <div class="card">
+          <h2>3. Class roster</h2>
+          <p class="muted">Students will pick their name from this list instead of typing it, so grades match up automatically.</p>
+          <label>Upload a roster file <span class="hint">.csv works best (a "Name" column, or First/Last columns) &mdash; or just one name per line</span></label>
+          <input type="file" id="fRoster" accept=".csv,.txt" />
+          <label>&hellip;or paste names, one per line</label>
+          <textarea id="fRosterText" rows="5" placeholder="Ada Lovelace&#10;Grace Hopper&#10;Alan Turing">${escapeHtml((draft.roster || []).map(s => s.name).join("\n"))}</textarea>
+          <button class="secondary" id="btnParseRoster" type="button" style="margin-top:8px;">Update roster from text</button>
+          <p class="muted" style="margin-top:10px;">Each student gets a random 4-digit PIN so nobody can submit under a classmate's name &mdash; you'll get a printable list after publishing. Tip: add a "PIN" or "Student ID" column to your CSV to set your own PINs instead.</p>
+          <div id="rosterPreview" style="margin-top:14px;"></div>
+        </div>
+      `;
+
+      qs("#fRoster").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        qs("#fRosterText").value = text;
+        draft.roster = mergeRosterPins(parseRoster(text), draft.roster);
+        renderRosterPreview();
+      });
+
+      qs("#btnParseRoster").addEventListener("click", () => {
+        draft.roster = mergeRosterPins(parseRoster(qs("#fRosterText").value), draft.roster);
+        renderRosterPreview();
+      });
+
+      renderRosterPreview();
+    }
+
+    function mergeRosterPins(newRoster, oldRoster) {
+      const oldByName = new Map((oldRoster || []).map((s) => [s.name, s.pin]));
+      return newRoster.map((s) => (oldByName.has(s.name) ? { ...s, pin: oldByName.get(s.name) } : s));
+    }
+
+    function renderRosterPreview() {
+      const el = qs("#rosterPreview");
+      if (!draft.roster.length) {
+        el.innerHTML = `<p class="muted">No students added yet.</p>`;
+        return;
+      }
+      el.innerHTML = `
+        <p class="muted">${draft.roster.length} student${draft.roster.length === 1 ? "" : "s"} loaded.</p>
+        <div class="table-scroll">
+          <table><thead><tr><th>#</th><th>Name</th><th>PIN</th></tr></thead><tbody>
+            ${draft.roster.map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td><code>${escapeHtml(s.pin)}</code></td></tr>`).join("")}
+          </tbody></table>
+        </div>
+      `;
+    }
+
+    function renderPublishSection() {
+      const section = qs("#publishSection");
+      section.innerHTML = `
+        <div class="card">
+          <h2>4. Save &amp; publish</h2>
+          <p class="muted">This creates the student link and a private results link. Save the results link somewhere safe &mdash; it's the only way to see or edit results later.</p>
+          <div id="publishError"></div>
+          <button id="btnPublish" ${draft.saving ? "disabled" : ""}>
+            ${draft.saving ? '<span class="spinner"></span> Saving&hellip;' : "Save & Publish"}
+          </button>
+          <div id="publishResult"></div>
+        </div>
+      `;
+      qs("#btnPublish").addEventListener("click", publishTicket);
+    }
+
+    async function publishTicket() {
+      qs("#publishError").innerHTML = "";
+      if (!draft.title.trim()) { qs("#publishError").innerHTML = `<div class="error-box">Please give the exit ticket a title.</div>`; return; }
+      if (!draft.roster.length) {
+        if (!confirm("You haven't added any students to the roster yet. Continue without a roster? Students won't be able to pick a name to submit answers.")) return;
+      }
+      draft.saving = true;
+      renderPublishSection();
+      try {
+        const result = await fetchJSON("/.netlify/functions/save-ticket", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: draft.title,
+            subject: draft.subject,
+            gradeLevel: draft.gradeLevel,
+            questions: draft.questions,
+            roster: draft.roster,
+          }),
+        });
+        saveTicketLocally({ id: result.id, editCode: result.editCode, title: draft.title, createdAt: new Date().toISOString() });
+        draft.saving = false;
+        showPublishSuccess(result.id, result.editCode);
+      } catch (err) {
+        draft.saving = false;
+        qs("#publishError").innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+        renderPublishSection();
+      }
+    }
+
+    function showPublishSuccess(id, editCode) {
+      const studentUrl = `${location.origin}/student.html?id=${id}`;
+      const resultsUrl = `${location.origin}/teacher.html?id=${id}&editCode=${editCode}`;
+      qs("#publishSection").innerHTML = `
+        <div class="card">
+          <div class="success-box">Exit ticket published!</div>
+          <label>Share this link with students</label>
+          <div class="link-box"><span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(studentUrl)}</span>
+            <button class="secondary" type="button" onclick="copyToClipboard('${studentUrl}')">Copy</button>
+          </div>
+          <label>Your private results link <span class="hint">bookmark this &mdash; it's the only way to see or edit results</span></label>
+          <div class="link-box"><span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(resultsUrl)}</span>
+            <button class="secondary" type="button" onclick="copyToClipboard('${resultsUrl}')">Copy</button>
+          </div>
+          <label>Student PINs <span class="hint">each student needs their name + PIN to submit, so no one can answer as a classmate &mdash; hand these out (print, post in your LMS privately, etc.)</span></label>
+          <button class="secondary" id="btnDownloadPins" type="button">Download roster &amp; PINs (CSV)</button>
+          <p style="margin-top:16px;"><a class="btn" href="${resultsUrl}">Go to results page &rarr;</a></p>
+        </div>
+      `;
+      qs("#btnDownloadPins").addEventListener("click", () => {
+        downloadCSV(`${draft.title.replace(/[^a-z0-9]+/gi, "-")}-student-pins.csv`, [
+          ["Name", "PIN"],
+          ...draft.roster.map((s) => [s.name, s.pin]),
+        ]);
+      });
+    }
+
+    // ---------------------------------------------------------------------
+    // "My Tickets" tab -- convenience list stored in this browser only
+    // ---------------------------------------------------------------------
+    function loadLocalTickets() {
+      try { return JSON.parse(localStorage.getItem("exitTickets") || "[]"); } catch (e) { return []; }
+    }
+    function saveTicketLocally(entry) {
+      const list = loadLocalTickets().filter((t) => t.id !== entry.id);
+      list.unshift(entry);
+      localStorage.setItem("exitTickets", JSON.stringify(list.slice(0, 100)));
+    }
+
+    function renderMyTicketsTab() {
+      const body = qs("#tabBody");
+      const list = loadLocalTickets();
+      if (!list.length) {
+        body.innerHTML = `<div class="card empty-state">
+          <p>No exit tickets created on this device yet.</p>
+          <button onclick="location.reload()">Create one</button>
+        </div>`;
+        return;
+      }
+      body.innerHTML = `
+        <div class="card">
+          <h2>Exit tickets created on this device</h2>
+          <p class="muted">This list only lives in this browser. If you switch devices, use the results link you saved when you published.</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Title</th><th>Created</th><th></th></tr></thead>
+              <tbody>
+                ${list.map((t) => `
+                  <tr>
+                    <td>${escapeHtml(t.title)}</td>
+                    <td>${new Date(t.createdAt).toLocaleString()}</td>
+                    <td><a href="teacher.html?id=${t.id}&editCode=${t.editCode}">View results &rarr;</a></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // ---------------------------------------------------------------------
+    // Results page
+    // ---------------------------------------------------------------------
+    async function renderResultsPage(id, editCode) {
+      app.innerHTML = `<p class="muted">Loading results&hellip;</p>`;
+      let data;
+      try {
+        data = await fetchJSON(`/.netlify/functions/get-results?id=${encodeURIComponent(id)}&editCode=${encodeURIComponent(editCode)}`);
+      } catch (err) {
+        app.innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+        return;
+      }
+      saveTicketLocally({ id, editCode, title: data.ticket.title, createdAt: data.ticket.createdAt });
+      renderResults(data.ticket, data.responses);
+    }
+
+    function renderResults(ticket, responses) {
+      const studentUrl = `${location.origin}/student.html?id=${ticket.id}`;
+      const roster = ticket.roster;
+      const byId = new Map(responses.map((r) => [r.studentId, r]));
+      const submittedCount = responses.length;
+      const avg = responses.length ? Math.round(responses.reduce((s, r) => s + r.percent, 0) / responses.length) : 0;
+      const needsReviewCount = responses.reduce((s, r) => s + r.perQuestion.filter((p) => p.needsReview).length, 0);
+
+      app.innerHTML = `
+        <div class="card">
+          <div class="row" style="align-items:center;">
+            <div>
+              <h2 style="margin-bottom:2px;">${escapeHtml(ticket.title)}</h2>
+              <p class="muted">${escapeHtml(ticket.subject || "")}${ticket.subject && ticket.gradeLevel ? " &middot; " : ""}${escapeHtml(ticket.gradeLevel || "")}</p>
+            </div>
+            <div style="text-align:right;">
+              <span class="pill neutral">${submittedCount}/${roster.length || 0} submitted</span>
+              ${responses.length ? `<span class="pill ${avg >= 70 ? "good" : avg >= 50 ? "warn" : "bad"}">avg ${avg}%</span>` : ""}
+              ${needsReviewCount ? `<span class="pill warn">${needsReviewCount} to review</span>` : ""}
+            </div>
+          </div>
+          <label>Student link</label>
+          <div class="link-box"><span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(studentUrl)}</span>
+            <button class="secondary" type="button" onclick="copyToClipboard('${studentUrl}')">Copy</button>
+          </div>
+          <p style="margin-top:12px;">
+            <button class="secondary" id="btnExport" type="button">Export results as CSV</button>
+            <button class="secondary" id="btnDownloadPins" type="button">Download roster &amp; PINs (CSV)</button>
+            <button class="secondary" id="btnRefresh" type="button">Refresh</button>
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>Student results</h2>
+          ${roster.length === 0 ? '<p class="muted">No roster was uploaded for this exit ticket.</p>' : `
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Student</th><th>Status</th><th>Score</th><th></th></tr></thead>
+                <tbody id="resultsBody"></tbody>
+              </table>
+            </div>
+          `}
+        </div>
+
+        <div class="card">
+          <h2>Answer key</h2>
+          <div id="answerKey"></div>
+        </div>
+      `;
+
+      qs("#btnRefresh").addEventListener("click", () => renderResultsPage(ticket.id, ticket.editCode));
+      qs("#btnExport").addEventListener("click", () => exportResultsCSV(ticket, responses));
+      qs("#btnDownloadPins").addEventListener("click", () => {
+        downloadCSV(`${ticket.title.replace(/[^a-z0-9]+/gi, "-")}-student-pins.csv`, [
+          ["Name", "PIN"],
+          ...roster.map((s) => [s.name, s.pin]),
+        ]);
+      });
+
+      if (roster.length) {
+        const tbody = qs("#resultsBody");
+        tbody.innerHTML = roster.map((s) => {
+          const r = byId.get(s.id);
+          if (!r) {
+            return `<tr><td>${escapeHtml(s.name)}</td><td><span class="pill neutral">Not submitted</span></td><td>&mdash;</td><td></td></tr>`;
+          }
+          const pillClass = r.percent >= 70 ? "good" : r.percent >= 50 ? "warn" : "bad";
+          return `
+            <tr>
+              <td>${escapeHtml(s.name)}</td>
+              <td><span class="pill ${pillClass}">${r.percent}%</span></td>
+              <td>${r.score}/${r.maxScore}</td>
+              <td><button class="secondary" data-detail="${s.id}" type="button">Details</button></td>
+            </tr>
+            <tr id="detail-${s.id}" hidden><td colspan="4"></td></tr>
+          `;
+        }).join("");
+
+        qsa("[data-detail]", tbody).forEach((btn) => {
+          btn.addEventListener("click", () => toggleDetail(btn.dataset.detail, ticket, byId.get(btn.dataset.detail)));
+        });
+      }
+
+      qs("#answerKey").innerHTML = ticket.questions.map((q, i) => {
+        if (q.type === "short_answer") {
+          return `<p><strong>Q${i + 1}.</strong> ${escapeHtml(q.prompt)}<br><span class="muted">Accepted keywords: ${escapeHtml((q.acceptableAnswers || []).join(", ") || "none set")}</span></p>`;
+        }
+        return `<p><strong>Q${i + 1}.</strong> ${escapeHtml(q.prompt)}<br><span class="muted">Correct answer: ${escapeHtml(q.options[q.correctIndex] || "")}</span></p>`;
+      }).join("");
+    }
+
+    function toggleDetail(studentId, ticket, record) {
+      const row = qs(`#detail-${studentId}`);
+      if (!row.hidden) { row.hidden = true; return; }
+      const cell = qs("td", row);
+      cell.innerHTML = ticket.questions.map((q) => {
+        const pq = record.perQuestion.find((p) => p.questionId === q.id);
+        const given = pq ? pq.given : "";
+        const correctLabel = q.type === "short_answer" ? "" : ` (correct: ${escapeHtml(q.options[q.correctIndex] || "")})`;
+        const answerDisplay = q.type === "short_answer" ? escapeHtml(given) : escapeHtml(q.options[given] !== undefined ? q.options[given] : "(no answer)");
+        return `
+          <div class="question-card">
+            <div class="qhead">
+              <span>${escapeHtml(q.prompt)}</span>
+              <span class="pill ${pq && pq.correct ? "good" : "bad"}">${pq && pq.correct ? "Correct" : "Incorrect"}</span>
+            </div>
+            <p class="muted">Answer: ${answerDisplay}${correctLabel}</p>
+            ${q.type === "short_answer" ? `
+              <button class="secondary" type="button" data-mark="1" data-q="${q.id}" data-s="${studentId}">Mark correct</button>
+              <button class="secondary" type="button" data-mark="0" data-q="${q.id}" data-s="${studentId}">Mark incorrect</button>
+            ` : ""}
+          </div>
+        `;
+      }).join("");
+      row.hidden = false;
+
+      qsa("[data-mark]", cell).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await fetchJSON("/.netlify/functions/update-response", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                ticketId: ticket.id,
+                editCode: ticket.editCode,
+                studentId: btn.dataset.s,
+                questionId: btn.dataset.q,
+                correct: btn.dataset.mark === "1",
+              }),
+            });
+            toast("Grade updated");
+            renderResultsPage(ticket.id, ticket.editCode);
+          } catch (err) {
+            toast(err.message);
+          }
+        });
+      });
+    }
+
+    function exportResultsCSV(ticket, responses) {
+      const header = ["Student", "Score", "Max", "Percent", ...ticket.questions.map((q, i) => `Q${i + 1}`)];
+      const rows = [header];
+      const byId = new Map(responses.map((r) => [r.studentId, r]));
+      ticket.roster.forEach((s) => {
+        const r = byId.get(s.id);
+        if (!r) {
+          rows.push([s.name, "", "", "not submitted", ...ticket.questions.map(() => "")]);
+          return;
+        }
+        const answers = ticket.questions.map((q) => {
+          const pq = r.perQuestion.find((p) => p.questionId === q.id);
+          if (!pq) return "";
+          if (q.type === "short_answer") return pq.given;
+          return q.options[pq.given] !== undefined ? q.options[pq.given] : "";
+        });
+        rows.push([s.name, r.score, r.maxScore, r.percent + "%", ...answers]);
+      });
+      downloadCSV(`${ticket.title.replace(/[^a-z0-9]+/gi, "-")}-results.csv`, rows);
+    }
+  </script>
+</body>
+</html>

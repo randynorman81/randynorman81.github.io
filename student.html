@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Exit Ticket</title>
+  <link rel="icon" href="assets/logo.jpg" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <div class="brand">
+        <img class="logo" src="assets/logo.jpg" alt="Social Circle High School logo" />
+        <h1>Social Circle High School Exit Ticket</h1>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app">
+    <p class="muted">Loading&hellip;</p>
+  </main>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const app = qs("#app");
+    const params = new URLSearchParams(location.search);
+    const ticketId = params.get("id");
+
+    let ticket = null;
+    const answers = {};
+    let selectedStudentId = null;
+
+    init();
+
+    async function init() {
+      if (!ticketId) {
+        app.innerHTML = `<div class="error-box">No exit ticket was specified. Ask your teacher for the correct link.</div>`;
+        return;
+      }
+      try {
+        ticket = await fetchJSON(`/.netlify/functions/get-ticket?id=${encodeURIComponent(ticketId)}`);
+      } catch (err) {
+        app.innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+        return;
+      }
+      const savedName = localStorage.getItem(`exitTicketStudent:${ticketId}`);
+      if (savedName) selectedStudentId = savedName;
+      render();
+    }
+
+    function render() {
+      app.innerHTML = `
+        <div class="card">
+          <h2>${escapeHtml(ticket.title)}</h2>
+          <p class="muted">${escapeHtml(ticket.subject || "")}${ticket.subject && ticket.gradeLevel ? " &middot; " : ""}${escapeHtml(ticket.gradeLevel || "")}</p>
+
+          <label>Select your name</label>
+          ${ticket.roster.length ? `
+            <select id="studentSelect">
+              <option value="">-- Select your name --</option>
+              ${ticket.roster.map((s) => `<option value="${s.id}" ${selectedStudentId === s.id ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("")}
+            </select>
+            <label>Enter your PIN <span class="hint">the 4-digit PIN your teacher gave you</span></label>
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="pinInput" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off" />
+          ` : `<p class="error-box">This exit ticket has no roster loaded. Ask your teacher to add one before you can submit.</p>`}
+        </div>
+
+        <form id="ticketForm">
+          ${ticket.questions.map((q, i) => questionHtml(q, i)).join("")}
+          <div class="card">
+            <div id="submitError"></div>
+            <button type="submit" id="btnSubmit">Submit Exit Ticket</button>
+          </div>
+        </form>
+
+        <div id="resultCard"></div>
+      `;
+
+      const select = qs("#studentSelect");
+      if (select) select.addEventListener("change", (e) => { selectedStudentId = e.target.value; });
+
+      qs("#ticketForm").addEventListener("submit", onSubmit);
+    }
+
+    function questionHtml(q, i) {
+      if (q.type === "short_answer") {
+        return `
+          <div class="card">
+            <label><strong>Question ${i + 1}.</strong> ${escapeHtml(q.prompt)}</label>
+            <textarea rows="3" data-qid="${q.id}" data-type="short_answer" placeholder="Type your answer..."></textarea>
+          </div>
+        `;
+      }
+      return `
+        <div class="card">
+          <label><strong>Question ${i + 1}.</strong> ${escapeHtml(q.prompt)}</label>
+          ${q.options.map((opt, oi) => `
+            <div class="option-row">
+              <input type="radio" name="${q.id}" value="${oi}" id="${q.id}-${oi}" />
+              <label for="${q.id}-${oi}">${escapeHtml(opt)}</label>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    async function onSubmit(e) {
+      e.preventDefault();
+      qs("#submitError").innerHTML = "";
+
+      let pin = "";
+      if (ticket.roster.length) {
+        if (!selectedStudentId) {
+          qs("#submitError").innerHTML = `<div class="error-box">Please select your name first.</div>`;
+          return;
+        }
+        pin = qs("#pinInput").value.trim();
+        if (!/^\d{4}$/.test(pin)) {
+          qs("#submitError").innerHTML = `<div class="error-box">Please enter the 4-digit PIN your teacher gave you.</div>`;
+          return;
+        }
+      }
+
+      for (const q of ticket.questions) {
+        if (q.type === "short_answer") {
+          const val = qs(`[data-qid="${q.id}"]`).value.trim();
+          answers[q.id] = val;
+        } else {
+          const checked = document.querySelector(`input[name="${q.id}"]:checked`);
+          if (!checked) {
+            qs("#submitError").innerHTML = `<div class="error-box">Please answer every question before submitting.</div>`;
+            return;
+          }
+          answers[q.id] = Number(checked.value);
+        }
+      }
+
+      const btn = qs("#btnSubmit");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Submitting…';
+
+      try {
+        const result = await fetchJSON("/.netlify/functions/submit-response", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ticketId: ticket.id, studentId: selectedStudentId, pin, answers }),
+        });
+        localStorage.setItem(`exitTicketStudent:${ticketId}`, selectedStudentId);
+        showResult(result);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Submit Exit Ticket";
+        qs("#submitError").innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function showResult(result) {
+      qs("#ticketForm").hidden = true;
+      const pillClass = result.percent >= 70 ? "good" : result.percent >= 50 ? "warn" : "bad";
+      qs("#resultCard").innerHTML = `
+        <div class="card center">
+          <h2>Submitted!</h2>
+          <p style="font-size:2rem; margin:0;"><span class="pill ${pillClass}" style="font-size:1rem;">${result.score}/${result.maxScore} &middot; ${result.percent}%</span></p>
+          <p class="muted">Your teacher will review any written answers.</p>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
