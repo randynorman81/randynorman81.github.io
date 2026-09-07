@@ -326,9 +326,11 @@
       }
       el.innerHTML = `
         <p class="muted">${draft.roster.length} student${draft.roster.length === 1 ? "" : "s"} loaded.</p>
-        <table><thead><tr><th>#</th><th>Name</th></tr></thead><tbody>
-          ${draft.roster.map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td></tr>`).join("")}
-        </tbody></table>
+        <div class="table-scroll">
+          <table><thead><tr><th>#</th><th>Name</th></tr></thead><tbody>
+            ${draft.roster.map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td></tr>`).join("")}
+          </tbody></table>
+        </div>
       `;
     }
 
@@ -423,18 +425,20 @@
         <div class="card">
           <h2>Exit tickets created on this device</h2>
           <p class="muted">This list only lives in this browser. If you switch devices, use the results link you saved when you published.</p>
-          <table>
-            <thead><tr><th>Title</th><th>Created</th><th></th></tr></thead>
-            <tbody>
-              ${list.map((t) => `
-                <tr>
-                  <td>${escapeHtml(t.title)}</td>
-                  <td>${new Date(t.createdAt).toLocaleString()}</td>
-                  <td><a href="teacher.html?id=${t.id}&editCode=${t.editCode}">View results &rarr;</a></td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Title</th><th>Created</th><th></th></tr></thead>
+              <tbody>
+                ${list.map((t) => `
+                  <tr>
+                    <td>${escapeHtml(t.title)}</td>
+                    <td>${new Date(t.createdAt).toLocaleString()}</td>
+                    <td><a href="teacher.html?id=${t.id}&editCode=${t.editCode}">View results &rarr;</a></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
@@ -489,10 +493,12 @@
         <div class="card">
           <h2>Student results</h2>
           ${roster.length === 0 ? '<p class="muted">No roster was uploaded for this exit ticket.</p>' : `
-            <table>
-              <thead><tr><th>Student</th><th>Status</th><th>Score</th><th></th></tr></thead>
-              <tbody id="resultsBody"></tbody>
-            </table>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Student</th><th>Status</th><th>Score</th><th></th></tr></thead>
+                <tbody id="resultsBody"></tbody>
+              </table>
+            </div>
           `}
         </div>
 

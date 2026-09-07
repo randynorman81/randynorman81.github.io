@@ -96,7 +96,7 @@
           ${q.options.map((opt, oi) => `
             <div class="option-row">
               <input type="radio" name="${q.id}" value="${oi}" id="${q.id}-${oi}" />
-              <label for="${q.id}-${oi}" style="font-weight:400; margin:0;">${escapeHtml(opt)}</label>
+              <label for="${q.id}-${oi}">${escapeHtml(opt)}</label>
             </div>
           `).join("")}
         </div>

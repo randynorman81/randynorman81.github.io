@@ -12,7 +12,9 @@
   --radius: 12px;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
@@ -20,12 +22,13 @@ body {
   background: var(--bg);
   color: var(--ink);
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 header.site {
   background: linear-gradient(120deg, var(--brand), var(--brand-dark));
   color: #fff;
-  padding: 20px 24px;
+  padding: 16px 20px;
 }
 
 header.site .wrap {
@@ -34,18 +37,20 @@ header.site .wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 header.site .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
 header.site .logo {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   background: #fff;
   object-fit: contain;
@@ -54,8 +59,9 @@ header.site .logo {
 }
 
 header.site h1 {
-  font-size: 1.3rem;
+  font-size: clamp(1rem, 4.5vw, 1.3rem);
   margin: 0;
+  line-height: 1.2;
 }
 
 header.site a {
@@ -65,7 +71,7 @@ header.site a {
 }
 
 header.site .tag {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   opacity: 0.9;
   font-weight: 400;
 }
@@ -73,7 +79,12 @@ header.site .tag {
 main.wrap {
   max-width: 980px;
   margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: 20px 14px 64px;
+}
+
+@media (max-width: 480px) {
+  main.wrap { padding: 16px 12px 56px; }
+  .card { padding: 16px; }
 }
 
 .card {
@@ -106,36 +117,49 @@ input[type="text"], input[type="number"], textarea, select {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 0.95rem;
+  /* 16px minimum keeps iOS Safari from auto-zooming the page on focus */
+  font-size: 16px;
   font-family: inherit;
   background: #fff;
   color: var(--ink);
+  min-height: 44px;
 }
 
-textarea { resize: vertical; }
+textarea { resize: vertical; min-height: 80px; }
 
 input[type="file"] {
   width: 100%;
-  padding: 8px;
+  padding: 10px;
   border: 1px dashed var(--border);
   border-radius: 8px;
   background: #fbfcff;
+  font-size: 16px;
+}
+
+input[type="radio"], input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--brand);
 }
 
 button, .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   cursor: pointer;
   border: none;
   border-radius: 8px;
-  padding: 10px 18px;
+  padding: 12px 18px;
   font-size: 0.95rem;
   font-weight: 600;
   font-family: inherit;
   background: var(--brand);
   color: #fff;
   transition: background 0.15s ease;
+  min-height: 44px;
+  touch-action: manipulation;
 }
 
 button:hover, .btn:hover { background: var(--brand-dark); }
@@ -168,6 +192,7 @@ button.danger:hover { background: #9e281f; }
 .pill.warn { background: #fdf1dc; color: var(--warn); }
 .pill.neutral { background: #eef0f6; color: var(--ink-soft); }
 
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; }
 th, td {
   text-align: left;
@@ -203,8 +228,23 @@ th { color: var(--ink-soft); font-size: 0.78rem; text-transform: uppercase; lett
   margin-bottom: 8px;
 }
 
-.option-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 8px;
+  border-radius: 8px;
+}
 .option-row input[type="text"] { flex: 1; }
+.option-row label {
+  flex: 1;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.option-row:has(input:checked) { background: #eef2ff; }
 
 .muted { color: var(--ink-soft); font-size: 0.88rem; }
 .error-box {
